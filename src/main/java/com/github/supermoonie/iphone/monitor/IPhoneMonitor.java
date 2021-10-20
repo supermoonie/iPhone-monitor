@@ -1,6 +1,7 @@
 package com.github.supermoonie.iphone.monitor;
 
 import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import com.alibaba.fastjson.TypeReference;
 import com.formdev.flatlaf.FlatDarkLaf;
@@ -26,6 +27,9 @@ import java.awt.*;
 import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
 import java.io.IOException;
+import java.lang.reflect.Method;
+import java.net.URL;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.List;
@@ -104,9 +108,11 @@ public class IPhoneMonitor extends JFrame {
         confirmButton.addActionListener(e -> {
             String version = Objects.requireNonNull(versionComboBox.getSelectedItem()).toString();
             String model = Objects.requireNonNull(modelComboBox.getSelectedItem()).toString();
-            logArea.append(String.format("[%s] 已选择: %s %s", DateFormatUtils.format(new Date(), "HH:mm:ss"), version, model));
+            logArea.append("---------------分割线---------------\n");
+            logArea.append(String.format("[%s] 已选择: %s %s\n", DateFormatUtils.format(new Date(), "HH:mm:ss"), version, model));
             try {
-                getAddress(new ArrayList<>(), categoryMap.get(version).get(model));
+                getStock(categoryMap.get(version).get(model), "北京 北京 朝阳区");
+//                getAddress(List.of("state=北京", "city=北京", "district=朝阳区"), categoryMap.get(version).get(model));
             } catch (IOException ioException) {
                 ioException.printStackTrace();
             }
@@ -145,12 +151,37 @@ public class IPhoneMonitor extends JFrame {
         setVisible(true);
     }
 
-    private void getStock() {
-
+    private void getStock(String iphoneCode, String location) throws IOException {
+        String url = String.format("https://www.apple.com.cn/shop/fulfillment-messages?pl=true&parts.0=%s&location=%s", iphoneCode, URLEncoder.encode(location, StandardCharsets.UTF_8));
+        String res = Request.Get(url)
+                .addHeader("sec-ch-ua", "\"Google Chrome\";v=\"93\", \" Not;A Brand\";v=\"99\", \"Chromium\";v=\"93\"")
+                .addHeader("Referer", String.format("https://www.apple.com.cn/shop/buy-iphone/iphone-13-pro/%s", iphoneCode))
+                .addHeader("DNT", "1")
+                .addHeader("sec-ch-ua-mobile", "?0")
+                .addHeader("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/93.0.4577.82 Safari/537.36")
+                .addHeader("sec-ch-ua-platform", "macOS")
+                .execute().handleResponse(response -> EntityUtils.toString(response.getEntity()));
+        JSONObject json = JSON.parseObject(res);
+        JSONArray stores = json.getJSONObject("body").getJSONObject("content").getJSONObject("pickupMessage").getJSONArray("stores");
+        for (int i = 0; i < stores.size(); i ++) {
+            JSONObject store = stores.getJSONObject(i);
+            String storeName = store.getString("storeName");
+            JSONObject partsAvailability = store.getJSONObject("partsAvailability");
+            if (partsAvailability.containsKey(iphoneCode)) {
+                JSONObject info = partsAvailability.getJSONObject(iphoneCode);
+                String pickupSearchQuote = info.getString("pickupSearchQuote");
+                if ("暂无供应".equals(pickupSearchQuote)) {
+                    logArea.append(String.format("[%s] %s 暂无供应\n", DateFormatUtils.format(new Date(), "HH:mm:ss"), storeName));
+                    continue;
+                }
+                logArea.append(String.format("[%s] %s %s\n", DateFormatUtils.format(new Date(), "HH:mm:ss"), storeName, pickupSearchQuote));
+            }
+        }
     }
 
     private void getAddress(List<String> params, String selectPhone) throws IOException {
         String url = String.format("https://www.apple.com.cn/shop/address-lookup?%s", String.join("&", params));
+        log.info("url: {}", url);
         String res = Request.Get(url)
                 .addHeader("sec-ch-ua", "\"Google Chrome\";v=\"93\", \" Not;A Brand\";v=\"99\", \"Chromium\";v=\"93\"")
                 .addHeader("Referer", String.format("https://www.apple.com.cn/shop/buy-iphone/iphone-13-pro/%s", selectPhone))
@@ -161,7 +192,6 @@ public class IPhoneMonitor extends JFrame {
                 .execute().handleResponse(response -> EntityUtils.toString(response.getEntity()));
         JSONObject json = JSON.parseObject(res);
         JSONObject body = json.getJSONObject("body");
-
         System.out.println(res);
     }
 
@@ -173,6 +203,13 @@ public class IPhoneMonitor extends JFrame {
             if (SystemInfo.isMacOS) {
                 System.setProperty("apple.laf.useScreenMenuBar", "true");
                 System.setProperty("apple.awt.UIElement", "true");
+                Class<?> appleAppClass = Class.forName("com.apple.eawt.Application");
+                Method getApplication = appleAppClass.getMethod("getApplication");
+                Object app = getApplication.invoke(appleAppClass);
+                Method setDockIconImage = appleAppClass.getMethod("setDockIconImage", Image.class);
+                URL url = IPhoneMonitor.class.getClassLoader().getResource("mitm.png");
+                Image image = Toolkit.getDefaultToolkit().getImage(url);
+                setDockIconImage.invoke(app, image);
             }
             preferences = Preferences.userRoot().node("/IPhoneMonitor");
             String themeName = preferences.get("/theme", FlatDarkLaf.class.getName());
