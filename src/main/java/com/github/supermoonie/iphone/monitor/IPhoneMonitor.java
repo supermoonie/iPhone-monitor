@@ -6,9 +6,7 @@ import com.alibaba.fastjson.JSONObject;
 import com.alibaba.fastjson.TypeReference;
 import com.formdev.flatlaf.FlatDarkLaf;
 import com.formdev.flatlaf.FlatLightLaf;
-import com.formdev.flatlaf.extras.FlatInspector;
 import com.formdev.flatlaf.extras.FlatSVGUtils;
-import com.formdev.flatlaf.extras.FlatUIDefaultsInspector;
 import com.formdev.flatlaf.util.SystemInfo;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -23,17 +21,12 @@ import javax.swing.text.DefaultCaret;
 import java.awt.*;
 import java.awt.event.ActionListener;
 import java.awt.event.ItemEvent;
-import java.io.File;
+import java.awt.event.ItemListener;
 import java.io.IOException;
-import java.lang.reflect.Method;
-import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
-import java.util.Date;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -53,7 +46,7 @@ public class IPhoneMonitor extends JFrame {
     private Map<String, Map<String, String>> categoryMap;
     private JComboBox<String> versionComboBox;
     private JComboBox<String> modelComboBox;
-    private JComboBox<String> provinceComboBox;
+    private JComboBox<String> stateComboBox;
     private JComboBox<String> cityComboBox;
     private JComboBox<String> areaComboBox;
     private JButton confirmButton;
@@ -61,6 +54,9 @@ public class IPhoneMonitor extends JFrame {
     private JLabel statusLabel;
     @Getter
     private ScheduledExecutorService scheduledExecutor;
+    private final Map<String, String> stateMap = new LinkedHashMap<>();
+    private final Map<String, String> cityMap = new LinkedHashMap<>();
+    private final Map<String, String> areaMap = new LinkedHashMap<>();
 
     private void initExecutor() {
         scheduledExecutor = new ScheduledThreadPoolExecutor(
@@ -118,9 +114,9 @@ public class IPhoneMonitor extends JFrame {
         addressLabel.setPreferredSize(new Dimension(50, 25));
         addressLabel.setHorizontalAlignment(JLabel.CENTER);
         addressSelectPanel.add(addressLabel);
-        provinceComboBox = new JComboBox<>();
-        provinceComboBox.setPreferredSize(new Dimension(220, 25));
-        addressSelectPanel.add(provinceComboBox);
+        stateComboBox = new JComboBox<>();
+        stateComboBox.setPreferredSize(new Dimension(220, 25));
+        addressSelectPanel.add(stateComboBox);
         cityComboBox = new JComboBox<>();
         cityComboBox.setPreferredSize(new Dimension(220, 25));
         addressSelectPanel.add(cityComboBox);
@@ -139,7 +135,7 @@ public class IPhoneMonitor extends JFrame {
         JPanel logPanel = new JPanel(new BorderLayout());
         logPanel.setBorder(BorderFactory.createTitledBorder("日志"));
         logArea = new JTextArea();
-        DefaultCaret caret = (DefaultCaret)logArea.getCaret();
+        DefaultCaret caret = (DefaultCaret) logArea.getCaret();
         caret.setUpdatePolicy(DefaultCaret.ALWAYS_UPDATE);
         logArea.setFont(new Font("微软雅黑", Font.PLAIN, 14));
         JScrollPane scrollPane = new JScrollPane(logArea);
@@ -151,7 +147,10 @@ public class IPhoneMonitor extends JFrame {
         logPanel.add(logButtonsPanel, BorderLayout.SOUTH);
 
         JPanel statusPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
+        statusPanel.setPreferredSize(new Dimension(200, 25));
         statusLabel = new JLabel();
+        statusLabel.setPreferredSize(new Dimension(200, 25));
+        statusLabel.setHorizontalAlignment(JLabel.LEFT);
         statusPanel.add(statusLabel);
 
         getContentPane().setLayout(new BorderLayout());
@@ -159,20 +158,7 @@ public class IPhoneMonitor extends JFrame {
         getContentPane().add(logPanel, BorderLayout.CENTER);
         getContentPane().add(statusPanel, BorderLayout.SOUTH);
 
-        scheduledExecutor.execute(() -> {
-            String version = Objects.requireNonNull(versionComboBox.getSelectedItem()).toString();
-            String model = Objects.requireNonNull(modelComboBox.getSelectedItem()).toString();
-            SwingUtilities.invokeLater(() -> statusLabel.setText("获取地址中..."));
-            try {
-                String res = getAddress(List.of(), categoryMap.get(version).get(model));
-                JSONObject address = JSON.parseObject(res);
-                JSONArray stateData = address.getJSONObject("body").getJSONObject("state").getJSONArray("data");
-
-            } catch (IOException e) {
-                log.error(e.getMessage(), e);
-            }
-            SwingUtilities.invokeLater(() -> statusLabel.setText(""));
-        });
+        refreshState();
 
         this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
@@ -184,6 +170,126 @@ public class IPhoneMonitor extends JFrame {
         setFocusable(true);
         setAutoRequestFocus(true);
         setVisible(true);
+    }
+
+    private void refreshState() {
+        String version = Objects.requireNonNull(versionComboBox.getSelectedItem()).toString();
+        String model = Objects.requireNonNull(modelComboBox.getSelectedItem()).toString();
+        SwingUtilities.invokeLater(() -> statusLabel.setText("获取地址中..."));
+        scheduledExecutor.execute(() -> {
+            try {
+                String res = getAddress(List.of(), categoryMap.get(version).get(model));
+                JSONObject address = JSON.parseObject(res);
+                JSONArray stateData = address.getJSONObject("body").getJSONObject("state").getJSONArray("data");
+                stateMap.clear();
+                for (int i = 0; i < stateData.size(); i ++) {
+                    JSONObject state = stateData.getJSONObject(i);
+                    String label = state.getString("label");
+                    String value = state.getString("value");
+                    stateMap.put(label, value);
+                }
+            } catch (Exception e) {
+                log.error(e.getMessage(), e);
+                SwingUtilities.invokeLater(() -> logArea.append(String.format("[%s] 获取地址失败, error: %s", DateFormatUtils.format(new Date(), "HH:mm:ss"), e.getMessage())));
+                return;
+            }
+            SwingUtilities.invokeLater(() -> {
+                for (String label : stateMap.keySet()) {
+                    stateComboBox.addItem(label);
+                }
+                stateComboBox.removeItemListener(stateItemListener);
+                stateComboBox.addItemListener(stateItemListener);
+                statusLabel.setText("");
+                refreshCity();
+            });
+        });
+    }
+
+    private final ItemListener stateItemListener = event -> {
+        if (event.getStateChange() == ItemEvent.SELECTED) {
+            refreshCity();
+        }
+    };
+
+    private void refreshCity() {
+        String version = Objects.requireNonNull(versionComboBox.getSelectedItem()).toString();
+        String model = Objects.requireNonNull(modelComboBox.getSelectedItem()).toString();
+        String stateLabel = Objects.requireNonNull(stateComboBox.getSelectedItem()).toString();
+        String state = stateMap.get(stateLabel);
+        SwingUtilities.invokeLater(() -> statusLabel.setText("获取地址中..."));
+        scheduledExecutor.execute(() -> {
+            try {
+                String res = getAddress(List.of("state=" + state), categoryMap.get(version).get(model));
+                System.out.println(res);
+                JSONObject address = JSON.parseObject(res);
+                JSONObject body = address.getJSONObject("body");
+                Object city = address.getJSONObject("body").get("city");
+                cityMap.clear();
+                if (city instanceof String) {
+                    String cityValue = city.toString();
+                    cityMap.put(cityValue, cityValue);
+                } else {
+                    JSONArray cityData = body.getJSONObject("city").getJSONArray("data");
+                    for (int i = 0; i < cityData.size(); i ++) {
+                        JSONObject data = cityData.getJSONObject(i);
+                        String label = data.getString("label");
+                        String value = data.getString("value");
+                        cityMap.put(label, value);
+                    }
+                }
+            } catch (Exception e) {
+                log.error(e.getMessage(), e);
+                SwingUtilities.invokeLater(() -> logArea.append(String.format("[%s] 获取地址失败, error: %s", DateFormatUtils.format(new Date(), "HH:mm:ss"), e.getMessage())));
+                return;
+            }
+            SwingUtilities.invokeLater(() -> {
+                cityComboBox.removeAllItems();
+                for (String label : cityMap.keySet()) {
+                    cityComboBox.addItem(label);
+                }
+                cityComboBox.removeItemListener(cityItemListener);
+                cityComboBox.addItemListener(cityItemListener);
+                statusLabel.setText("");
+                refreshArea();
+            });
+        });
+    }
+
+    private final ItemListener cityItemListener = event -> {
+        if (event.getStateChange() == ItemEvent.SELECTED) {
+            refreshArea();
+        }
+    };
+
+    private void refreshArea() {
+        String version = Objects.requireNonNull(versionComboBox.getSelectedItem()).toString();
+        String model = Objects.requireNonNull(modelComboBox.getSelectedItem()).toString();
+        String stateLabel = Objects.requireNonNull(stateComboBox.getSelectedItem()).toString();
+        String cityLabel = Objects.requireNonNull(cityComboBox.getSelectedItem()).toString();
+        String state = stateMap.get(stateLabel);
+        String city = cityMap.get(cityLabel);
+        SwingUtilities.invokeLater(() -> statusLabel.setText("获取地址中..."));
+        scheduledExecutor.execute(() -> {
+            try {
+                String res = getAddress(List.of("state=" + state, "city=" + city), categoryMap.get(version).get(model));
+                System.out.println(res);
+                JSONObject address = JSON.parseObject(res);
+                JSONObject body = address.getJSONObject("body");
+            } catch (Exception e) {
+                log.error(e.getMessage(), e);
+                SwingUtilities.invokeLater(() -> logArea.append(String.format("[%s] 获取地址失败, error: %s", DateFormatUtils.format(new Date(), "HH:mm:ss"), e.getMessage())));
+                return;
+            }
+            SwingUtilities.invokeLater(() -> {
+//                cityComboBox.removeAllItems();
+//                for (String label : cityMap.keySet()) {
+//                    cityComboBox.addItem(label);
+//                }
+//                cityComboBox.removeItemListener(cityItemListener);
+//                cityComboBox.addItemListener(cityItemListener);
+//                statusLabel.setText("");
+            });
+        });
     }
 
     private boolean getStock(String iphoneCode, String location) throws IOException {
