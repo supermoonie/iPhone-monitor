@@ -21,6 +21,7 @@ import org.apache.http.util.EntityUtils;
 import javax.swing.*;
 import javax.swing.text.DefaultCaret;
 import java.awt.*;
+import java.awt.event.ActionListener;
 import java.awt.event.ItemEvent;
 import java.io.File;
 import java.io.IOException;
@@ -52,7 +53,12 @@ public class IPhoneMonitor extends JFrame {
     private Map<String, Map<String, String>> categoryMap;
     private JComboBox<String> versionComboBox;
     private JComboBox<String> modelComboBox;
+    private JComboBox<String> provinceComboBox;
+    private JComboBox<String> cityComboBox;
+    private JComboBox<String> areaComboBox;
+    private JButton confirmButton;
     private JTextArea logArea;
+    private JLabel statusLabel;
     @Getter
     private ScheduledExecutorService scheduledExecutor;
 
@@ -75,27 +81,26 @@ public class IPhoneMonitor extends JFrame {
         setIconImages(FlatSVGUtils.createWindowIconImages("/iphone.svg"));
         setTitle("iPhone Monitor");
 
-        JPanel selectPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 5));
-        selectPanel.setBorder(BorderFactory.createTitledBorder("手机类型选择"));
+        JPanel mobileSelectPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 5));
         JLabel versionLabel = new JLabel("版本选择: ");
         versionLabel.setPreferredSize(new Dimension(100, 25));
         versionLabel.setHorizontalAlignment(JLabel.CENTER);
-        selectPanel.add(versionLabel);
+        mobileSelectPanel.add(versionLabel);
         String category = new String(IOUtils.resourceToByteArray("/category.json"), StandardCharsets.UTF_8);
         categoryMap = JSON.parseObject(category, new TypeReference<>() {
         });
         String[] versions = categoryMap.keySet().toArray(new String[]{});
         versionComboBox = new JComboBox<>(versions);
         versionComboBox.setPreferredSize(new Dimension(220, 25));
-        selectPanel.add(versionComboBox);
+        mobileSelectPanel.add(versionComboBox);
         JLabel modelLabel = new JLabel("型号选择: ");
         modelLabel.setPreferredSize(new Dimension(100, 25));
         modelLabel.setHorizontalAlignment(JLabel.CENTER);
-        selectPanel.add(modelLabel);
+        mobileSelectPanel.add(modelLabel);
         String[] models = categoryMap.get(versions[0]).keySet().toArray(new String[]{});
         modelComboBox = new JComboBox<>(models);
         modelComboBox.setPreferredSize(new Dimension(220, 25));
-        selectPanel.add(modelComboBox);
+        mobileSelectPanel.add(modelComboBox);
         versionComboBox.addItemListener(e -> {
             if (e.getStateChange() == ItemEvent.SELECTED) {
                 String selectedVersion = Objects.requireNonNull(versionComboBox.getSelectedItem()).toString();
@@ -108,82 +113,66 @@ public class IPhoneMonitor extends JFrame {
             }
         });
 
+        JPanel addressSelectPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 5));
+        JLabel addressLabel = new JLabel("地址: ");
+        addressLabel.setPreferredSize(new Dimension(50, 25));
+        addressLabel.setHorizontalAlignment(JLabel.CENTER);
+        addressSelectPanel.add(addressLabel);
+        provinceComboBox = new JComboBox<>();
+        provinceComboBox.setPreferredSize(new Dimension(220, 25));
+        addressSelectPanel.add(provinceComboBox);
+        cityComboBox = new JComboBox<>();
+        cityComboBox.setPreferredSize(new Dimension(220, 25));
+        addressSelectPanel.add(cityComboBox);
+        areaComboBox = new JComboBox<>();
+        areaComboBox.setPreferredSize(new Dimension(220, 25));
+        addressSelectPanel.add(areaComboBox);
+        confirmButton = new JButton("确定");
+        confirmButton.addActionListener(onConfirmButtonClick);
+        addressSelectPanel.add(confirmButton);
 
-        JButton confirmButton = new JButton("确定");
-        confirmButton.addActionListener(e -> {
-            confirmButton.setEnabled(false);
-            if ("确定".equals(confirmButton.getText())) {
-                String version = Objects.requireNonNull(versionComboBox.getSelectedItem()).toString();
-                String model = Objects.requireNonNull(modelComboBox.getSelectedItem()).toString();
-                scheduledExecutor.scheduleAtFixedRate(() -> {
-                    try {
-                        SwingUtilities.invokeLater(() -> {
-                            logArea.append("---------------分割线---------------\n");
-                            logArea.append(String.format("[%s] 已选择: %s %s 请求中...\n", DateFormatUtils.format(new Date(), "HH:mm:ss"), version, model));
-                        });
-                        boolean flag = getStock(categoryMap.get(version).get(model), "北京 北京 朝阳区");
-                        if (flag) {
-                            scheduledExecutor.shutdown();
-                            initExecutor();
-                            SwingUtilities.invokeLater(() -> {
-                                confirmButton.setText("确定");
-                                IPhoneMonitor instance = IPhoneMonitor.getInstance();
-                                int sta = instance.getExtendedState() & ~JFrame.ICONIFIED & JFrame.NORMAL;
-                                instance.setExtendedState(sta);
-                                instance.setAlwaysOnTop(true);
-                                instance.toFront();
-                                instance.requestFocus();
-                                instance.setAlwaysOnTop(false);
-                                logArea.requestFocus();
-                            });
-                        }
-//                getAddress(List.of("state=北京", "city=北京", "district=朝阳区"), categoryMap.get(version).get(model));
-                    } catch (IOException ioException) {
-                        log.error(ioException.getMessage(), ioException);
-                        SwingUtilities.invokeLater(() -> {
-                            logArea.append(String.format("[%s] 请求失败: %s\n", DateFormatUtils.format(new Date(), "HH:mm:ss"), ioException.getMessage()));
-                        });
-                    } finally {
-                        logArea.setCaretPosition(logArea.getText().length());
-                    }
-                }, 1, 5, TimeUnit.SECONDS);
-                confirmButton.setText("取消");
-            } else {
-                scheduledExecutor.shutdown();
-                try {
-                    scheduledExecutor.awaitTermination(30, TimeUnit.SECONDS);
-                } catch (InterruptedException interruptedException) {
-                    log.error(interruptedException.getMessage(), interruptedException);
-                } finally {
-                    initExecutor();
-                    confirmButton.setText("确定");
-                }
-            }
-            confirmButton.setEnabled(true);
-        });
-        selectPanel.add(confirmButton);
+        Box selectBox = Box.createVerticalBox();
+        selectBox.setBorder(BorderFactory.createTitledBorder("选择"));
+        selectBox.add(mobileSelectPanel);
+        selectBox.add(addressSelectPanel);
 
-        Box box = Box.createVerticalBox();
-        box.add(selectPanel);
-
-        JPanel container = new JPanel(new BorderLayout());
-        container.setBorder(BorderFactory.createTitledBorder("日志"));
+        JPanel logPanel = new JPanel(new BorderLayout());
+        logPanel.setBorder(BorderFactory.createTitledBorder("日志"));
         logArea = new JTextArea();
         DefaultCaret caret = (DefaultCaret)logArea.getCaret();
         caret.setUpdatePolicy(DefaultCaret.ALWAYS_UPDATE);
         logArea.setFont(new Font("微软雅黑", Font.PLAIN, 14));
         JScrollPane scrollPane = new JScrollPane(logArea);
-        container.add(scrollPane, BorderLayout.CENTER);
+        logPanel.add(scrollPane, BorderLayout.CENTER);
         JButton clearLogButton = new JButton("清除日志");
         clearLogButton.addActionListener(e -> logArea.setText(""));
         JPanel logButtonsPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 5));
         logButtonsPanel.add(clearLogButton);
-        container.add(logButtonsPanel, BorderLayout.SOUTH);
+        logPanel.add(logButtonsPanel, BorderLayout.SOUTH);
 
+        JPanel statusPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
+        statusLabel = new JLabel();
+        statusPanel.add(statusLabel);
 
         getContentPane().setLayout(new BorderLayout());
-        getContentPane().add(box, BorderLayout.NORTH);
-        getContentPane().add(container, BorderLayout.CENTER);
+        getContentPane().add(selectBox, BorderLayout.NORTH);
+        getContentPane().add(logPanel, BorderLayout.CENTER);
+        getContentPane().add(statusPanel, BorderLayout.SOUTH);
+
+        scheduledExecutor.execute(() -> {
+            String version = Objects.requireNonNull(versionComboBox.getSelectedItem()).toString();
+            String model = Objects.requireNonNull(modelComboBox.getSelectedItem()).toString();
+            SwingUtilities.invokeLater(() -> statusLabel.setText("获取地址中..."));
+            try {
+                String res = getAddress(List.of(), categoryMap.get(version).get(model));
+                JSONObject address = JSON.parseObject(res);
+                JSONArray stateData = address.getJSONObject("body").getJSONObject("state").getJSONArray("data");
+
+            } catch (IOException e) {
+                log.error(e.getMessage(), e);
+            }
+            SwingUtilities.invokeLater(() -> statusLabel.setText(""));
+        });
 
         this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
@@ -232,10 +221,10 @@ public class IPhoneMonitor extends JFrame {
         return false;
     }
 
-    private void getAddress(List<String> params, String selectPhone) throws IOException {
+    private String getAddress(List<String> params, String selectPhone) throws IOException {
         String url = String.format("https://www.apple.com.cn/shop/address-lookup?%s", String.join("&", params));
         log.info("url: {}", url);
-        String res = Request.Get(url)
+        return Request.Get(url)
                 .addHeader("sec-ch-ua", "\"Google Chrome\";v=\"93\", \" Not;A Brand\";v=\"99\", \"Chromium\";v=\"93\"")
                 .addHeader("Referer", String.format("https://www.apple.com.cn/shop/buy-iphone/iphone-13-pro/%s", selectPhone))
                 .addHeader("DNT", "1")
@@ -243,10 +232,59 @@ public class IPhoneMonitor extends JFrame {
                 .addHeader("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/93.0.4577.82 Safari/537.36")
                 .addHeader("sec-ch-ua-platform", "macOS")
                 .execute().handleResponse(response -> EntityUtils.toString(response.getEntity()));
-        JSONObject json = JSON.parseObject(res);
-        JSONObject body = json.getJSONObject("body");
-        System.out.println(res);
     }
+
+    private final ActionListener onConfirmButtonClick = event -> {
+        confirmButton.setEnabled(false);
+        if ("确定".equals(confirmButton.getText())) {
+            String version = Objects.requireNonNull(versionComboBox.getSelectedItem()).toString();
+            String model = Objects.requireNonNull(modelComboBox.getSelectedItem()).toString();
+            scheduledExecutor.scheduleAtFixedRate(() -> {
+                try {
+                    SwingUtilities.invokeLater(() -> {
+                        logArea.append("---------------分割线---------------\n");
+                        logArea.append(String.format("[%s] 已选择: %s %s 请求中...\n", DateFormatUtils.format(new Date(), "HH:mm:ss"), version, model));
+                    });
+                    boolean flag = getStock(categoryMap.get(version).get(model), "北京 北京 朝阳区");
+                    if (flag) {
+                        scheduledExecutor.shutdown();
+                        initExecutor();
+                        SwingUtilities.invokeLater(() -> {
+                            confirmButton.setText("确定");
+                            IPhoneMonitor instance = IPhoneMonitor.getInstance();
+                            int sta = instance.getExtendedState() & ~JFrame.ICONIFIED & JFrame.NORMAL;
+                            instance.setExtendedState(sta);
+                            instance.setAlwaysOnTop(true);
+                            instance.toFront();
+                            instance.requestFocus();
+                            instance.setAlwaysOnTop(false);
+                            logArea.requestFocus();
+                        });
+                    }
+//                getAddress(List.of("state=北京", "city=北京", "district=朝阳区"), categoryMap.get(version).get(model));
+                } catch (IOException ioException) {
+                    log.error(ioException.getMessage(), ioException);
+                    SwingUtilities.invokeLater(() -> {
+                        logArea.append(String.format("[%s] 请求失败: %s\n", DateFormatUtils.format(new Date(), "HH:mm:ss"), ioException.getMessage()));
+                    });
+                } finally {
+                    logArea.setCaretPosition(logArea.getText().length());
+                }
+            }, 1, 5, TimeUnit.SECONDS);
+            confirmButton.setText("取消");
+        } else {
+            scheduledExecutor.shutdown();
+            try {
+                scheduledExecutor.awaitTermination(30, TimeUnit.SECONDS);
+            } catch (InterruptedException interruptedException) {
+                log.error(interruptedException.getMessage(), interruptedException);
+            } finally {
+                initExecutor();
+                confirmButton.setText("确定");
+            }
+        }
+        confirmButton.setEnabled(true);
+    };
 
     public static void main(String[] args) {
         try {
