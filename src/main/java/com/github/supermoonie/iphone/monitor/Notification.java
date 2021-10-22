@@ -33,18 +33,6 @@ public class Notification {
         defaultTrayIcon = new TrayIcon(icon);
         defaultTrayIcon.setToolTip("iPhone-monitor");
         PopupMenu popupMenu = new PopupMenu();
-        MenuItem quitItem = new MenuItem("Quit");
-        quitItem.addActionListener(event -> {
-            IPhoneMonitor.getInstance().getScheduledExecutor().shutdownNow();
-            try {
-                IPhoneMonitor.getInstance().getScheduledExecutor().awaitTermination(30, TimeUnit.SECONDS);
-            } catch (InterruptedException e) {
-                log.error(e.getMessage(), e);
-            }
-            IPhoneMonitor.getInstance().dispose();
-            System.exit(0);
-        });
-        popupMenu.add(quitItem);
         MenuItem showItem = new MenuItem("show/hidden");
         showItem.addActionListener(event -> {
             IPhoneMonitor instance = IPhoneMonitor.getInstance();
@@ -58,6 +46,18 @@ public class Notification {
             }
         });
         popupMenu.add(showItem);
+        MenuItem quitItem = new MenuItem("Quit");
+        quitItem.addActionListener(event -> {
+            IPhoneMonitor.getInstance().getScheduledExecutor().shutdownNow();
+            try {
+                IPhoneMonitor.getInstance().getScheduledExecutor().awaitTermination(30, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                log.error(e.getMessage(), e);
+            }
+            IPhoneMonitor.getInstance().dispose();
+            System.exit(0);
+        });
+        popupMenu.add(quitItem);
         defaultTrayIcon.setPopupMenu(popupMenu);
         SystemTray.getSystemTray().add(defaultTrayIcon);
     }
