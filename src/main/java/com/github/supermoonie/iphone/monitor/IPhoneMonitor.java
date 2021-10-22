@@ -8,6 +8,7 @@ import com.formdev.flatlaf.FlatDarkLaf;
 import com.formdev.flatlaf.FlatLightLaf;
 import com.formdev.flatlaf.extras.FlatSVGUtils;
 import com.formdev.flatlaf.util.SystemInfo;
+import com.github.supermoonie.iphone.monitor.ui.StatusPanel;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.IOUtils;
@@ -51,7 +52,7 @@ public class IPhoneMonitor extends JFrame {
     private JComboBox<String> areaComboBox;
     private JButton confirmButton;
     private JTextArea logArea;
-    private JLabel statusLabel;
+    private StatusPanel statusPanel;
     @Getter
     private ScheduledExecutorService scheduledExecutor;
     private final Map<String, String> stateMap = new LinkedHashMap<>();
@@ -146,12 +147,7 @@ public class IPhoneMonitor extends JFrame {
         logButtonsPanel.add(clearLogButton);
         logPanel.add(logButtonsPanel, BorderLayout.SOUTH);
 
-        JPanel statusPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
-        statusPanel.setPreferredSize(new Dimension(200, 25));
-        statusLabel = new JLabel();
-        statusLabel.setPreferredSize(new Dimension(200, 25));
-        statusLabel.setHorizontalAlignment(JLabel.LEFT);
-        statusPanel.add(statusLabel);
+        statusPanel = new StatusPanel();
 
         getContentPane().setLayout(new BorderLayout());
         getContentPane().add(selectBox, BorderLayout.NORTH);
@@ -175,7 +171,7 @@ public class IPhoneMonitor extends JFrame {
     private void refreshState() {
         String version = Objects.requireNonNull(versionComboBox.getSelectedItem()).toString();
         String model = Objects.requireNonNull(modelComboBox.getSelectedItem()).toString();
-        SwingUtilities.invokeLater(() -> statusLabel.setText("获取地址中..."));
+        SwingUtilities.invokeLater(() -> statusPanel.setStatusText("获取地址中"));
         scheduledExecutor.execute(() -> {
             try {
                 String res = getAddress(List.of(), categoryMap.get(version).get(model));
@@ -199,7 +195,7 @@ public class IPhoneMonitor extends JFrame {
                 }
                 stateComboBox.removeItemListener(stateItemListener);
                 stateComboBox.addItemListener(stateItemListener);
-                statusLabel.setText("");
+                statusPanel.setStatusText("");
                 refreshCity();
             });
         });
@@ -216,7 +212,7 @@ public class IPhoneMonitor extends JFrame {
         String model = Objects.requireNonNull(modelComboBox.getSelectedItem()).toString();
         String stateLabel = Objects.requireNonNull(stateComboBox.getSelectedItem()).toString();
         String state = stateMap.get(stateLabel);
-        SwingUtilities.invokeLater(() -> statusLabel.setText("获取地址中..."));
+        SwingUtilities.invokeLater(() -> statusPanel.setStatusText("获取地址中"));
         scheduledExecutor.execute(() -> {
             try {
                 String res = getAddress(List.of("state=" + state), categoryMap.get(version).get(model));
@@ -249,7 +245,7 @@ public class IPhoneMonitor extends JFrame {
                 }
                 cityComboBox.removeItemListener(cityItemListener);
                 cityComboBox.addItemListener(cityItemListener);
-                statusLabel.setText("");
+                statusPanel.setStatusText("");
                 refreshArea();
             });
         });
@@ -268,25 +264,37 @@ public class IPhoneMonitor extends JFrame {
         String cityLabel = Objects.requireNonNull(cityComboBox.getSelectedItem()).toString();
         String state = stateMap.get(stateLabel);
         String city = cityMap.get(cityLabel);
-        SwingUtilities.invokeLater(() -> statusLabel.setText("获取地址中..."));
+        SwingUtilities.invokeLater(() -> statusPanel.setStatusText("获取地址中"));
         scheduledExecutor.execute(() -> {
             try {
                 String res = getAddress(List.of("state=" + state, "city=" + city), categoryMap.get(version).get(model));
                 System.out.println(res);
                 JSONObject address = JSON.parseObject(res);
                 JSONObject body = address.getJSONObject("body");
+                areaMap.clear();
+                Object district = body.get("district");
+                if (district instanceof String) {
+                    String districtValue = district.toString();
+                    areaMap.put(districtValue, districtValue);
+                } else {
+                    JSONArray districtData = body.getJSONObject("district").getJSONArray("data");
+                    for (int i = 0; i < districtData.size(); i ++) {
+                        JSONObject data = districtData.getJSONObject(i);
+                        String label = data.getString("label");
+                        String value = data.getString("value");
+                        areaMap.put(label, value);
+                    }
+                }
             } catch (Exception e) {
                 log.error(e.getMessage(), e);
                 SwingUtilities.invokeLater(() -> logArea.append(String.format("[%s] 获取地址失败, error: %s", DateFormatUtils.format(new Date(), "HH:mm:ss"), e.getMessage())));
                 return;
             }
             SwingUtilities.invokeLater(() -> {
-//                cityComboBox.removeAllItems();
-//                for (String label : cityMap.keySet()) {
-//                    cityComboBox.addItem(label);
-//                }
-//                cityComboBox.removeItemListener(cityItemListener);
-//                cityComboBox.addItemListener(cityItemListener);
+                areaComboBox.removeAllItems();
+                for (String label : areaMap.keySet()) {
+                    areaComboBox.addItem(label);
+                }
 //                statusLabel.setText("");
             });
         });
@@ -349,7 +357,7 @@ public class IPhoneMonitor extends JFrame {
                 try {
                     SwingUtilities.invokeLater(() -> {
                         logArea.append("---------------分割线---------------\n");
-                        logArea.append(String.format("[%s] 已选择: %s %s 请求中...\n", DateFormatUtils.format(new Date(), "HH:mm:ss"), version, model));
+                        logArea.append(String.format("[%s] 已选择: %s %s 请求中\n", DateFormatUtils.format(new Date(), "HH:mm:ss"), version, model));
                     });
                     boolean flag = getStock(categoryMap.get(version).get(model), "北京 北京 朝阳区");
                     if (flag) {
