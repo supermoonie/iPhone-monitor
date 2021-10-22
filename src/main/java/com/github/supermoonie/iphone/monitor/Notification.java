@@ -45,6 +45,19 @@ public class Notification {
             System.exit(0);
         });
         popupMenu.add(quitItem);
+        MenuItem showItem = new MenuItem("show/hidden");
+        showItem.addActionListener(event -> {
+            IPhoneMonitor instance = IPhoneMonitor.getInstance();
+            if (instance.isVisible()) {
+                instance.setVisible(false);
+            } else {
+                instance.setVisible(true);
+                instance.setAlwaysOnTop(true);
+                instance.toFront();
+                instance.setAlwaysOnTop(false);
+            }
+        });
+        popupMenu.add(showItem);
         defaultTrayIcon.setPopupMenu(popupMenu);
         SystemTray.getSystemTray().add(defaultTrayIcon);
     }

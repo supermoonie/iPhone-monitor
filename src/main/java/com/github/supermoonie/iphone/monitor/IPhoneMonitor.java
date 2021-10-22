@@ -350,13 +350,17 @@ public class IPhoneMonitor extends JFrame {
         if ("确定".equals(confirmButton.getText())) {
             String version = Objects.requireNonNull(versionComboBox.getSelectedItem()).toString();
             String model = Objects.requireNonNull(modelComboBox.getSelectedItem()).toString();
+            String stateLabel = Objects.requireNonNull(stateComboBox.getSelectedItem()).toString();
+            String cityLabel = Objects.requireNonNull(cityComboBox.getSelectedItem()).toString();
+            String areaLabel = Objects.requireNonNull(areaComboBox.getSelectedItem()).toString();
+            String address = stateMap.get(stateLabel) + " " + cityMap.get(cityLabel) + " " + areaMap.get(areaLabel);
             scheduledExecutor.scheduleAtFixedRate(() -> {
                 try {
                     SwingUtilities.invokeLater(() -> {
                         logArea.append("---------------分割线---------------\n");
-                        logArea.append(String.format("[%s] 已选择: %s %s 请求中\n", DateFormatUtils.format(new Date(), "HH:mm:ss"), version, model));
+                        logArea.append(String.format("[%s] 已选择手机型号: %s %s, 地区: %s 请求中\n", DateFormatUtils.format(new Date(), "HH:mm:ss"), version, model, address));
                     });
-                    boolean flag = getStock(categoryMap.get(version).get(model), "北京 北京 朝阳区");
+                    boolean flag = getStock(categoryMap.get(version).get(model), address);
                     if (flag) {
                         scheduledExecutor.shutdown();
                         initExecutor();
@@ -372,7 +376,6 @@ public class IPhoneMonitor extends JFrame {
                             logArea.requestFocus();
                         });
                     }
-//                getAddress(List.of("state=北京", "city=北京", "district=朝阳区"), categoryMap.get(version).get(model));
                 } catch (IOException ioException) {
                     log.error(ioException.getMessage(), ioException);
                     SwingUtilities.invokeLater(() -> {
