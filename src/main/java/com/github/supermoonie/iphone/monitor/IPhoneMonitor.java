@@ -6,7 +6,9 @@ import com.alibaba.fastjson.JSONObject;
 import com.alibaba.fastjson.TypeReference;
 import com.formdev.flatlaf.FlatDarkLaf;
 import com.formdev.flatlaf.FlatLightLaf;
+import com.formdev.flatlaf.extras.FlatInspector;
 import com.formdev.flatlaf.extras.FlatSVGUtils;
+import com.formdev.flatlaf.extras.FlatUIDefaultsInspector;
 import com.formdev.flatlaf.util.SystemInfo;
 import com.github.supermoonie.iphone.monitor.ui.StatusPanel;
 import lombok.Getter;
@@ -152,8 +154,9 @@ public class IPhoneMonitor extends JFrame {
         getContentPane().setLayout(new BorderLayout());
         getContentPane().add(selectBox, BorderLayout.NORTH);
         getContentPane().add(logPanel, BorderLayout.CENTER);
-        getContentPane().add(statusPanel, BorderLayout.SOUTH);
+//        getContentPane().add(statusPanel, BorderLayout.SOUTH);
 
+        statusPanel.setStatusText("loading...");
         refreshState();
 
         this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -171,7 +174,6 @@ public class IPhoneMonitor extends JFrame {
     private void refreshState() {
         String version = Objects.requireNonNull(versionComboBox.getSelectedItem()).toString();
         String model = Objects.requireNonNull(modelComboBox.getSelectedItem()).toString();
-        SwingUtilities.invokeLater(() -> statusPanel.setStatusText("获取地址中"));
         scheduledExecutor.execute(() -> {
             try {
                 String res = getAddress(List.of(), categoryMap.get(version).get(model));
@@ -195,7 +197,6 @@ public class IPhoneMonitor extends JFrame {
                 }
                 stateComboBox.removeItemListener(stateItemListener);
                 stateComboBox.addItemListener(stateItemListener);
-                statusPanel.setStatusText("");
                 refreshCity();
             });
         });
@@ -212,7 +213,6 @@ public class IPhoneMonitor extends JFrame {
         String model = Objects.requireNonNull(modelComboBox.getSelectedItem()).toString();
         String stateLabel = Objects.requireNonNull(stateComboBox.getSelectedItem()).toString();
         String state = stateMap.get(stateLabel);
-        SwingUtilities.invokeLater(() -> statusPanel.setStatusText("获取地址中"));
         scheduledExecutor.execute(() -> {
             try {
                 String res = getAddress(List.of("state=" + state), categoryMap.get(version).get(model));
@@ -245,7 +245,6 @@ public class IPhoneMonitor extends JFrame {
                 }
                 cityComboBox.removeItemListener(cityItemListener);
                 cityComboBox.addItemListener(cityItemListener);
-                statusPanel.setStatusText("");
                 refreshArea();
             });
         });
@@ -264,7 +263,6 @@ public class IPhoneMonitor extends JFrame {
         String cityLabel = Objects.requireNonNull(cityComboBox.getSelectedItem()).toString();
         String state = stateMap.get(stateLabel);
         String city = cityMap.get(cityLabel);
-        SwingUtilities.invokeLater(() -> statusPanel.setStatusText("获取地址中"));
         scheduledExecutor.execute(() -> {
             try {
                 String res = getAddress(List.of("state=" + state, "city=" + city), categoryMap.get(version).get(model));
@@ -295,7 +293,6 @@ public class IPhoneMonitor extends JFrame {
                 for (String label : areaMap.keySet()) {
                     areaComboBox.addItem(label);
                 }
-//                statusLabel.setText("");
             });
         });
     }
@@ -423,6 +420,8 @@ public class IPhoneMonitor extends JFrame {
             FlatLightLaf.setup();
             FlatDarkLaf.setup();
             UIManager.setLookAndFeel(FlatLightLaf.class.getName());
+            FlatInspector.install("ctrl shift alt X");
+            FlatUIDefaultsInspector.install("ctrl shift alt Y");
             instance = new IPhoneMonitor();
             Notification.getInstance();
         } catch (Exception e) {
