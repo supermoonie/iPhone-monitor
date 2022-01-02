@@ -46,7 +46,7 @@ public class IPhoneMonitor extends JFrame {
     private static Preferences preferences;
     @Getter
     private static IPhoneMonitor instance;
-    private Map<String, Map<String, String>> categoryMap;
+    private LinkedHashMap<String, LinkedHashMap<String, String>> categoryMap;
     private JComboBox<String> versionComboBox;
     private JComboBox<String> modelComboBox;
     private JComboBox<String> stateComboBox;
@@ -77,7 +77,7 @@ public class IPhoneMonitor extends JFrame {
         super();
         initExecutor();
 
-        setIconImages(FlatSVGUtils.createWindowIconImages("/iphone.svg"));
+        setIconImages(FlatSVGUtils.createWindowIconImages("/apple.svg"));
         setTitle("iPhone Monitor");
 
         JPanel mobileSelectPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 5));
@@ -389,7 +389,7 @@ public class IPhoneMonitor extends JFrame {
         } else {
             scheduledExecutor.shutdown();
             try {
-                scheduledExecutor.awaitTermination(30, TimeUnit.SECONDS);
+                var ignore = scheduledExecutor.awaitTermination(30, TimeUnit.SECONDS);
             } catch (InterruptedException interruptedException) {
                 log.error(interruptedException.getMessage(), interruptedException);
             } finally {

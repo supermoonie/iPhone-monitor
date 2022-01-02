@@ -50,7 +50,7 @@ public class Notification {
         quitItem.addActionListener(event -> {
             IPhoneMonitor.getInstance().getScheduledExecutor().shutdownNow();
             try {
-                IPhoneMonitor.getInstance().getScheduledExecutor().awaitTermination(30, TimeUnit.SECONDS);
+                var ignore = IPhoneMonitor.getInstance().getScheduledExecutor().awaitTermination(30, TimeUnit.SECONDS);
             } catch (InterruptedException e) {
                 log.error(e.getMessage(), e);
             }
