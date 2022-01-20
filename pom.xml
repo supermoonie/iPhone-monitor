@@ -105,7 +105,7 @@
             <plugin>
                 <groupId>io.github.fvarrui</groupId>
                 <artifactId>javapackager</artifactId>
-                <version>1.1.0</version>
+                <version>1.5.1</version>
                 <executions>
                     <execution>
                         <phase>package</phase>
@@ -123,9 +123,16 @@
                             <generateInstaller>true</generateInstaller>
                             <administratorRequired>false</administratorRequired>
                             <platform>auto</platform>
-                            <iconFile>assets/mac/iPhone_monitor.icns</iconFile>
                             <winConfig>
                                 <generateMsi>false</generateMsi>
+                                <icoFile>${basedir}/assets/windows/iPhone_monitor.ico</icoFile>
+                                <disableDirPage>false</disableDirPage>
+                                <disableProgramGroupPage>false</disableProgramGroupPage>
+                                <disableFinishedPage>false</disableFinishedPage>
+                                <setupLanguages>
+                                    <english>compiler:Default.isl</english>
+                                    <chinese>compiler:Languages\ChineseSimplified.isl</chinese>
+                                </setupLanguages>
                             </winConfig>
                             <macConfig>
                                 <generateDmg>true</generateDmg>
